@@ -10,3 +10,10 @@ ParallelNOVA is a variance of [NOVA][NOVA]. It aims to parallelize simultaneous 
 [DCC]: http://dcclab.sogang.ac.kr/
 [SG]: http://sogang.ac.kr/index.do
 [CS]: http://cs.sogang.ac.kr/sub_kor/index.php
+
+# HOW TO USE
+To insert the NOVA mode with `n` CPU(s):
+`insmod [NOVA_kernel_root_directory]/fs/nova/nova.ko cpu_num=n`
+
+To mount the NOVA filesystem:
+`mount -t NOVA -o init /dev/[pmem_device_name] [mount_point]`

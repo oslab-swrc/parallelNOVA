@@ -1193,7 +1193,8 @@ int nova_append_file_write_entry_parallel(struct super_block *sb, struct nova_in
 
 	NOVA_START_TIMING(append_file_entry_t, append_time);
 
-	nova_update_entry_csum(data);
+	/*for scalable test, we suggest it as bug*/
+	//nova_update_entry_csum(data);
 
 	entry_info.type = FILE_WRITE;
 	entry_info.update = update;

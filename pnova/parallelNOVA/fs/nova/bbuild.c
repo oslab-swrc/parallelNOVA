@@ -73,13 +73,13 @@ void nova_init_header(struct super_block *sb,
 	sih->alter_log_head = 0;
 	sih->alter_log_tail = 0;
 	sih->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
-
+/*
 	init_rwsem_cst(&sih->i_rwsem_cst);
 	init_rwsem_cst(&sih->size_rwsem_cst);
 	init_rwsem_cst(&sih->block_rwsem_cst);
 	init_rwsem_cst(&sih->entry_rwsem_cst);
 	init_rwsem_cst(&sih->inval_rwsem_cst);
-
+*/
 	sih->segment_rwsem = kzalloc(SEGMENT_MAX_NUMBER*sizeof(atomic_t), GFP_KERNEL);
 	for(i=0; i<120; i++){
 		sih->pc_log_pointer[i] = 0;

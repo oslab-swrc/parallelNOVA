@@ -1068,6 +1068,11 @@ extern const struct file_operations nova_wrap_file_operations;
 int nova_inode_log_fast_gc(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_tail, u64 new_block, u64 alter_new_block, int num_pages,
+	int force_thorough);
+
+int nova_inode_log_fast_gc_parallel(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 curr_tail, u64 new_block, u64 alter_new_block, int num_pages,
 	int force_thorough, int cpu_num);
 
 /* ioctl.c */

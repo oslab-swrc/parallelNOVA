@@ -491,8 +491,8 @@ static inline void set_default_opts(struct nova_sb_info *sbi)
 	set_opt(sbi->s_mount_opt, ERRORS_CONT);
 	sbi->head_reserved_blocks = HEAD_RESERVED_BLOCKS;
 	sbi->tail_reserved_blocks = TAIL_RESERVED_BLOCKS;
-	//sbi->cpus = num_online_cpus();
-	sbi->cpus = 30;
+	sbi->cpus = num_online_cpus();
+	//sbi->cpus = 30;
 	nova_info("%d cpus online\n", sbi->cpus);
 	sbi->map_id = 0;
 	sbi->snapshot_si = NULL;

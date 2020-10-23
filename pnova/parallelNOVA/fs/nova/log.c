@@ -603,7 +603,7 @@ static int nova_append_log_entry_parallel(struct super_block *sb,
      */
 
     //curr_p = old_tail;
-	curr_p = nova_get_append_head(sb,pi,sih,tail,size,MAIN_LOG,0,&extended);
+	curr_p = nova_get_append_head_parallel(sb,pi,sih,tail,size,MAIN_LOG,0,&extended);
 
 	if (curr_p == 0)
 		return -ENOSPC;
@@ -1193,7 +1193,8 @@ int nova_append_file_write_entry_parallel(struct super_block *sb, struct nova_in
 
 	NOVA_START_TIMING(append_file_entry_t, append_time);
 
-	nova_update_entry_csum(data);
+	/*for scalable test, we suggest it as bug*/
+	//nova_update_entry_csum(data);
 
 	entry_info.type = FILE_WRITE;
 	entry_info.update = update;
@@ -1513,6 +1514,44 @@ int nova_allocate_inode_log_pages_test(struct super_block *sb,
 
 static int nova_initialize_inode_log(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	int log_id)
+{
+	u64 new_block;
+	int allocated;
+
+	
+	allocated = nova_allocate_inode_log_pages(sb, sih,
+					1, &new_block, ANY_CPU,
+					log_id == MAIN_LOG ? 0 : 1);
+	if (allocated != 1) {
+		nova_err(sb, "%s ERROR: no inode log page available\n",
+					__func__);
+		return -ENOSPC;
+	}
+	nova_memunlock_inode(sb, pi);
+	if (log_id == MAIN_LOG) {
+		pi->log_tail = new_block;
+		nova_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 0);
+		pi->log_head = new_block;
+		sih->log_head = sih->log_tail = new_block;
+		sih->log_pages = 1;
+		nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 1);
+	} else {
+		pi->alter_log_tail = new_block;
+		nova_flush_buffer(&pi->alter_log_tail, CACHELINE_SIZE, 0);
+		pi->alter_log_head = new_block;
+		sih->alter_log_head = sih->alter_log_tail = new_block;
+		sih->log_pages++;
+		nova_flush_buffer(&pi->alter_log_head, CACHELINE_SIZE, 1);
+	}
+	nova_update_inode_checksum(pi);
+	nova_memlock_inode(sb, pi);
+
+	return 0;
+}
+
+static int nova_initialize_inode_log_parallel(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	int log_id,int cpu_num)
 {
 	u64 new_block;
@@ -1555,6 +1594,81 @@ static int nova_initialize_inode_log(struct super_block *sb,
  * allocated size.  Otherwise, increase by EXTEND_THRESHOLD. Then, do GC.
  */
 static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih, u64 curr_p)
+{
+	u64 new_block, alter_new_block = 0;
+	int allocated;
+	unsigned long num_pages;
+	int ret;
+	
+
+	nova_dbgv("%s: inode %lu, curr 0x%llx\n", __func__, sih->ino, curr_p);
+
+	if (curr_p == 0) {
+		ret = nova_initialize_inode_log(sb, pi, sih, MAIN_LOG);
+		if (ret)
+			return 0;
+
+		if (metadata_csum) {
+			ret = nova_initialize_inode_log(sb, pi, sih, ALTER_LOG);
+			if (ret)
+				return 0;
+
+			nova_memunlock_inode(sb, pi);
+			nova_update_alter_pages(sb, pi, sih->log_head,
+							sih->alter_log_head);
+			nova_memlock_inode(sb, pi);
+		}
+		
+		return sih->log_head;
+	}
+
+	num_pages = sih->log_pages >= EXTEND_THRESHOLD ?
+				EXTEND_THRESHOLD : sih->log_pages;
+//	nova_dbg("Before append log pages:\n");
+//	nova_print_inode_log_page(sb, inode);
+	allocated = nova_allocate_inode_log_pages(sb, sih,
+					num_pages, &new_block, ANY_CPU, 0);
+	nova_dbg_verbose("Link block %llu to block %llu\n",
+					curr_p >> PAGE_SHIFT,
+					new_block >> PAGE_SHIFT);
+	if (allocated <= 0) {
+		nova_err(sb, "%s ERROR: no inode log page available\n",
+					__func__);
+		nova_dbg("curr_p 0x%llx, %lu pages\n", curr_p,
+					sih->log_pages);
+		return 0;
+	}
+
+	if (metadata_csum) {
+		allocated = nova_allocate_inode_log_pages(sb, sih,
+				num_pages, &alter_new_block, ANY_CPU, 1);
+		if (allocated <= 0) {
+			nova_err(sb, "%s ERROR: no inode log page available\n",
+					__func__);
+			nova_dbg("curr_p 0x%llx, %lu pages\n", curr_p,
+					sih->log_pages);
+			return 0;
+		}
+
+		nova_memunlock_inode(sb, pi);
+		nova_update_alter_pages(sb, pi, new_block, alter_new_block);
+		nova_memlock_inode(sb, pi);
+	}
+
+
+	nova_inode_log_fast_gc(sb, pi, sih, curr_p,
+			       new_block, alter_new_block, allocated, 0);
+
+//	nova_dbg("After append log pages:\n");
+//	nova_print_inode_log_page(sb, inode);
+	/* Atomic switch to new log */
+//	nova_switch_to_new_log(sb, pi, new_block, num_pages);
+
+	return new_block;
+}
+
+static u64 nova_extend_inode_log_parallel(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 curr_p,int cpu_num)
 {
 	u64 new_block, alter_new_block = 0;
@@ -1566,12 +1680,12 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 	nova_dbgv("%s: inode %lu, curr 0x%llx\n", __func__, sih->ino, curr_p);
 
 	if (curr_p == 0) {
-		ret = nova_initialize_inode_log(sb, pi, sih, MAIN_LOG, cpu_num);
+		ret = nova_initialize_inode_log_parallel(sb, pi, sih, MAIN_LOG, cpu_num);
 		if (ret)
 			return 0;
 
 		if (metadata_csum) {
-			ret = nova_initialize_inode_log(sb, pi, sih, ALTER_LOG,cpu_num);
+			ret = nova_initialize_inode_log_parallel(sb, pi, sih, ALTER_LOG,cpu_num);
 			if (ret)
 				return 0;
 
@@ -1617,7 +1731,7 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 	}
 
 
-	nova_inode_log_fast_gc(sb, pi, sih, curr_p,
+	nova_inode_log_fast_gc_parallel(sb, pi, sih, curr_p,
 			       new_block, alter_new_block, allocated, 0, cpu_num);
 
 //	nova_dbg("After append log pages:\n");
@@ -1665,7 +1779,56 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	int thorough_gc, int *extended)
 {
 	u64 curr_p;
+
+	if (tail)
+		curr_p = tail;
+	else if (log_id == MAIN_LOG)
+		curr_p = sih->log_tail;
+	else
+		curr_p = sih->alter_log_tail;
+	
+//	nova_dbg("cpu %d, curr 0x%llx\n", cpu_num, curr_p);
+
+	if (curr_p == 0 || (is_last_entry(curr_p, size) &&
+				next_log_page(sb, curr_p) == 0)) {
+		if (is_last_entry(curr_p, size)) {
+			nova_memunlock_block(sb, nova_get_block(sb, curr_p));
+			nova_set_next_page_flag(sb, curr_p);
+			nova_memlock_block(sb, nova_get_block(sb, curr_p));
+		}
+
+		/* Alternate log should not go here */
+		if (log_id != MAIN_LOG)
+			return 0;
+
+		if (thorough_gc == 0) {
+			curr_p = nova_extend_inode_log(sb, pi, sih, curr_p);
+		} else {
+			curr_p = nova_append_one_log_page(sb, sih, curr_p);
+			/* For thorough GC */
+			*extended = 1;
+		}
+
+		if (curr_p == 0)
+			return 0;
+	}
+
+	if (is_last_entry(curr_p, size)) {
+		nova_memunlock_block(sb, nova_get_block(sb, curr_p));
+		nova_set_next_page_flag(sb, curr_p);
+		nova_memlock_block(sb, nova_get_block(sb, curr_p));
+		curr_p = next_log_page(sb, curr_p);
+	}
+	return curr_p;
+}
+
+u64 nova_get_append_head_parallel(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih, u64 tail, size_t size, int log_id,
+	int thorough_gc, int *extended)
+{
+	u64 curr_p;
 	int cpu_num = nova_get_cpuid(sb);
+
 	if (tail)
 		curr_p = tail;
 	else if (log_id == MAIN_LOG)
@@ -1691,7 +1854,7 @@ u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 			return 0;
 
 		if (thorough_gc == 0) {
-			curr_p = nova_extend_inode_log(sb, pi, sih, curr_p, cpu_num);
+			curr_p = nova_extend_inode_log_parallel(sb, pi, sih, curr_p, cpu_num);
 		} else {
 			curr_p = nova_append_one_log_page(sb, sih, curr_p);
 			/* For thorough GC */

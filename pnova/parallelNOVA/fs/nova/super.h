@@ -214,4 +214,10 @@ extern void nova_update_super_crc(struct super_block *sb);
 extern void nova_sync_super(struct super_block *sb);
 
 struct snapshot_info *nova_alloc_snapshot_info(struct super_block *sb);
+
+/*nova_dm.c*/
+void multi_dev_mount(struct super_block *sb, struct nova_sb_info *sbi);
+u64 pnova_get_addr_off(struct nova_sb_info *sbi, void *addr);
+void *pnova_get_block(struct super_block *sb, u64 block);
+
 #endif

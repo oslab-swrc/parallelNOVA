@@ -324,9 +324,11 @@ static inline void memset_nt(void *dest, uint32_t dword, size_t length)
  */
 static inline void *nova_get_block(struct super_block *sb, u64 block)
 {
-	struct nova_super_block *ps = nova_get_super(sb);
+	//struct nova_super_block *ps = nova_get_super(sb);
 
-	return block ? ((void *)ps + block) : NULL;
+	//return block ? ((void *)ps + block) : NULL;
+	
+	return block ? pnova_get_block(sb, block) : NULL;
 }
 
 static inline int nova_get_reference(struct super_block *sb, u64 block,
@@ -343,9 +345,11 @@ static inline int nova_get_reference(struct super_block *sb, u64 block,
 static inline u64
 nova_get_addr_off(struct nova_sb_info *sbi, void *addr)
 {
-	NOVA_ASSERT((addr >= sbi->virt_addr) &&
-			(addr < (sbi->virt_addr + sbi->initsize)));
-	return (u64)(addr - sbi->virt_addr);
+	//NOVA_ASSERT((addr >= sbi->virt_addr) &&
+	//		(addr < (sbi->virt_addr + sbi->initsize)));
+	//return (u64)(addr - sbi->virt_addr);
+	
+	return pnova_get_addr_off(sbi, addr);
 }
 
 static inline u64
@@ -1066,6 +1070,11 @@ extern const struct file_operations nova_wrap_file_operations;
 
 /* gc.c */
 int nova_inode_log_fast_gc(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 curr_tail, u64 new_block, u64 alter_new_block, int num_pages,
+	int force_thorough);
+
+int nova_inode_log_fast_gc_parallel(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode_info_header *sih,
 	u64 curr_tail, u64 new_block, u64 alter_new_block, int num_pages,
 	int force_thorough, int cpu_num);

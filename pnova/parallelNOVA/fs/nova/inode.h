@@ -125,14 +125,14 @@ struct nova_inode_info_header {
 	struct qspinlock entry_lock;
 */
 	atomic_t* segment_rwsem;
-
+/*
 	struct rwcst_semaphore i_rwsem_cst;		
 	struct rwcst_semaphore size_rwsem_cst;		
 	struct rwcst_semaphore block_rwsem_cst;		
 	struct rwcst_semaphore entry_rwsem_cst;		
 	struct rwcst_semaphore inval_rwsem_cst;	
-
-	struct pc_log_pointer *pc_log_pointer[30];
+*/
+	struct pc_log_pointer *pc_log_pointer[120];
 };
 
 /* For rebuild purpose, temporarily store pi infomation */

@@ -294,6 +294,9 @@ int nova_free_contiguous_log_blocks(struct super_block *sb,
 u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih, u64 tail, size_t size, int log_id,
 	int thorough_gc, int *extended);
+u64 nova_get_append_head_parallel(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih, u64 tail, size_t size, int log_id,
+	int thorough_gc, int *extended);
 int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, unsigned int ia_valid, struct iattr *attr,
 	u64 epoch_id);

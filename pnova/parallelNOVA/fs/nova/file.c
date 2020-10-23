@@ -838,13 +838,11 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	/* nova_inode tail pointer will be updated and we make sure all other
 	 * inode fields are good before checksumming the whole structure
 	 */
-/*	TODO: Test1	
 	if (nova_check_inode_integrity(sb, sih->ino, sih->pi_addr,
 				sih->alter_pi_addr, &inode_copy, 0) < 0) {
 		ret = -EIO;
 		goto out;
 	}
-*/
 	offset = pos & (sb->s_blocksize - 1);
 	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 	total_blocks = num_blocks;
@@ -860,7 +858,6 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 
 	//nova_segment_write_lock(sih, start_seg, end_seg - start_seg + 1);
 
-/*	TODO: test2
 	if (nova_check_overlap_vmas(sb, sih, start_blk, num_blocks)) {
 		nova_dbgv("COW write overlaps with vma: inode %lu, pgoff %lu, %lu blocks\n",
 				inode->i_ino, start_blk, num_blocks);
@@ -869,7 +866,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 		ret = -EACCES;
 		goto out;
 	}
-*/
+
 	/* offset in the actual block size block */
 
 	ret = file_remove_privs(filp);
